@@ -38,6 +38,23 @@ $ php bin/console server:start
 $ open http://localhost:8000/
 ```
 
+### For Docker installation
+
+```bash
+$ docker-compose up -d
+$ docker-compose run php php bin/console sylius:install
+$ open http://localhost/
+```
+
+> You may check if php-fpm is running just execution `docker-composer ps`
+
+If the pages not load the assets, just run the below commands:
+
+```bash
+$ docker-compose run nodejs yarn install
+$ docker-compose run nodejs yarn build
+```
+
 Troubleshooting
 ---------------
 

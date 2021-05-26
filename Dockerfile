@@ -1,22 +1,26 @@
 # the different stages of this Dockerfile are meant to be built into separate images
+# https://docs.docker.com/develop/develop-images/multistage-build/#stop-at-a-specific-build-stage
 # https://docs.docker.com/compose/compose-file/#target
 
+# https://docs.docker.com/engine/reference/builder/#understand-how-arg-and-from-interact
 ARG PHP_VERSION=7.4
 ARG NODE_VERSION=10
-ARG NGINX_VERSION=1.16
+ARG NGINX_VERSION=1.17
 
+# "php" stage
 FROM php:${PHP_VERSION}-fpm-alpine AS sylius_php
 
 # persistent / runtime deps
 RUN apk add --no-cache \
         acl \
+        fcgi \
         file \
         gettext \
         git \
         mariadb-client \
     ;
 
-ARG APCU_VERSION=5.1.17
+ARG APCU_VERSION=5.1.18
 RUN set -eux; \
     apk add --no-cache --virtual .build-deps \
         $PHPIZE_DEPS \
@@ -30,16 +34,19 @@ RUN set -eux; \
         libzip-dev \
         mariadb-dev \
         zlib-dev \
-    ; \
-    \
+    ;
+
+RUN set -eux; \
     docker-php-ext-configure gd --with-jpeg=/usr/include/ --with-webp=/usr/include --with-freetype=/usr/include/; \
+    docker-php-ext-configure zip; \
     docker-php-ext-install -j$(nproc) \
         exif \
         gd \
         intl \
         pdo_mysql \
         zip \
-    ; \
+    ;
+RUN set -eux; \
     pecl install \
         apcu-${APCU_VERSION} \
     ; \
@@ -47,8 +54,8 @@ RUN set -eux; \
     docker-php-ext-enable \
         apcu \
         opcache \
-    ; \
-    \
+    ;
+RUN set -eux; \
     runDeps="$( \
         scanelf --needed --nobanner --format '%n#p' --recursive /usr/local/lib/php/extensions \
             | tr ',' '\n' \
@@ -58,13 +65,22 @@ RUN set -eux; \
     apk add --no-cache --virtual .sylius-phpexts-rundeps $runDeps; \
     \
     apk del .build-deps
+
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 COPY docker/php/php.ini /usr/local/etc/php/php.ini
 COPY docker/php/php-cli.ini /usr/local/etc/php/php-cli.ini
 
+RUN set -eux; \
+    { \
+        echo '[www]'; \
+        echo 'ping.path = /ping'; \
+    } | tee /usr/local/etc/php-fpm.d/docker-healthcheck.conf
+
 # https://getcomposer.org/doc/03-cli.md#composer-allow-superuser
 ENV COMPOSER_ALLOW_SUPERUSER=1
+# install Symfony Flex globally to speed up download of Composer packages (parallelized prefetching)
 RUN set -eux; \
+    composer global require "symfony/flex" --prefer-dist --no-progress --classmap-authoritative; \
     composer clear-cache
 ENV PATH="${PATH}:/root/.composer/vendor/bin"
 
@@ -76,11 +92,15 @@ ARG APP_ENV=prod
 # prevent the reinstallation of vendors at every changes in the source code
 COPY composer.json composer.lock symfony.lock ./
 RUN set -eux; \
-    composer install --prefer-dist --no-autoloader --no-scripts --no-progress; \
+    composer install --prefer-dist --no-dev --no-scripts --no-progress; \
     composer clear-cache
 
+# do not use .env files in production
+COPY .env ./
+RUN composer dump-env prod; \
+    rm .env
+
 # copy only specifically what we need
-COPY .env .env.prod .env.test .env.test_cached ./
 COPY bin bin/
 COPY config config/
 COPY public public/
@@ -100,12 +120,19 @@ VOLUME /srv/sylius/var
 
 VOLUME /srv/sylius/public/media
 
+COPY docker/php/docker-healthcheck.sh /usr/local/bin/docker-healthcheck
+RUN chmod +x /usr/local/bin/docker-healthcheck
+
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD ["docker-healthcheck"]
+
 COPY docker/php/docker-entrypoint.sh /usr/local/bin/docker-entrypoint
 RUN chmod +x /usr/local/bin/docker-entrypoint
 
 ENTRYPOINT ["docker-entrypoint"]
 CMD ["php-fpm"]
 
+# "node" stage
+# depends on the "php" stage above
 FROM node:${NODE_VERSION}-alpine AS sylius_nodejs
 
 WORKDIR /srv/sylius
@@ -142,6 +169,8 @@ RUN chmod +x /usr/local/bin/docker-entrypoint
 ENTRYPOINT ["docker-entrypoint"]
 CMD ["yarn", "watch"]
 
+# "nginx" stage
+# depends on the "php" and "node" stages above
 FROM nginx:${NGINX_VERSION}-alpine AS sylius_nginx
 
 COPY docker/nginx/conf.d/default.conf /etc/nginx/conf.d/
