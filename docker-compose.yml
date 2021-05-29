@@ -1,6 +1,20 @@
 version: '3.4'
 
 services:
+  phpfpm:
+    container_name: sylius/phpfpm
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+      args:
+        PHP_VERSION: ${PHP_VERSION}
+    env_file:
+      - .env
+    deploy:
+      resources:
+          limits:
+            cpus: 0.50
+            memory: 512M
   php:
     build:
       context: .
@@ -31,11 +45,8 @@ services:
 
   mysql:
     image: percona:5.7
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-nopassword}
-      - MYSQL_DATABASE=sylius
-      - MYSQL_USER=sylius
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-nopassword}
+    env_file:
+      - .env
     volumes:
       - mysql-data:/var/lib/mysql:rw
       # you may use a bind-mounted host directory instead, so that it is harder to accidentally remove the volume and lose all your data!
