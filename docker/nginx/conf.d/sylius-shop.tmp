@@ -1,5 +1,5 @@
 server {
-    root /srv/sylius/public;
+    root ${SYLIUS_WORKSPACE}/public;
     listen *:80;
 
     location / {
@@ -9,7 +9,7 @@ server {
 
     location ~ ^/index\.php(/|$) {
         # Comment the next line and uncomment the next to enable dynamic resolution (incompatible with Kubernetes)
-        fastcgi_pass php:9000;
+        fastcgi_pass ${NGINX_FASTCGI_PASS};
         #resolver 127.0.0.11;
         #set $upstream_host php;
         #fastcgi_pass $upstream_host:9000;

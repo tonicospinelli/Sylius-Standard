@@ -66,6 +66,7 @@ FROM phpfpm_base AS phpfpm_config
 ENV PHP_DATE_TIMEZONE "${PHP_DATE_TIMEZONE}"
 ENV PHPFPM_LISTEN "${PHPFPM_LISTEN}"
 ENV PHPFPM_LOG_LEVEL "${PHPFPM_LOG_LEVEL}"
+ENV PHP_MEMORY_LIMIT "${PHP_MEMORY_LIMIT}"
 ENV PHPFPM_PM "${PHPFPM_PM}"
 ENV PHPFPM_PM_MAX_CHILDREN "${PHPFPM_PM_MAX_CHILDREN}"
 ENV PHPFPM_PM_MIN_SPARE_SERVERS "${PHPFPM_PM_MIN_SPARE_SERVERS}"
@@ -78,6 +79,8 @@ ENV COMPOSER_ALLOW_SUPERUSER=1
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 COPY conf.d/* /usr/local/etc/php/conf.d
 COPY php-fpm.d/* /usr/local/etc/php-fpm.d
+
+RUN composer global require "symfony/flex" --prefer-dist --no-progress --classmap-authoritative
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint
 RUN chmod +x /usr/local/bin/docker-entrypoint

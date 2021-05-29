@@ -1,9 +1,12 @@
 #!/bin/sh
 set -e
 
-envsubst < /usr/local/etc/php/conf.d/sylius-date.tmp > /usr/local/etc/php/conf.d/sylius-date.ini
-envsubst < /usr/local/etc/php-fpm.d/zzz-sylius.tmp > /usr/local/etc/php-fpm.d/zzz-sylius.conf
-
+if [ ! -f /usr/local/etc/php/conf.d/sylius-date.ini ]; then
+	envsubst < /usr/local/etc/php/conf.d/sylius-date.tmp > /usr/local/etc/php/conf.d/sylius-date.ini
+fi
+if [ ! -f /usr/local/etc/php-fpm.d/zzz-sylius.conf ]; then
+	envsubst < /usr/local/etc/php-fpm.d/zzz-sylius.tmp > /usr/local/etc/php-fpm.d/zzz-sylius.conf
+fi
 # first arg is `-f` or `--some-option`
 if [ "${1#-}" != "$1" ]; then
 	set -- php-fpm "$@"
